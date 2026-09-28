@@ -1,0 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/**/__pycache__/
+backend/**/dagsf_dev.db*
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.pnpm-store/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Test artifacts
+screenshots/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Docs build
+docs/_build/
+site/
+
+# Temporary
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# Local git worktrees (contains a .git pointer file, never committable)
+.worktrees/
