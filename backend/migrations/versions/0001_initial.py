@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("timezone", sa.String(64), nullable=False, server_default="America/Mexico_City"),
         sa.Column("currency", sa.String(3), nullable=False, server_default="MXN"),
         sa.Column("locale", sa.String(8), nullable=False, server_default="es-MX"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
     )
@@ -43,7 +43,7 @@ def upgrade() -> None:
         sa.Column("role", sa.String(32), nullable=False, server_default="asesor"),
         sa.Column("phone", sa.String(40), nullable=True),
         sa.Column("avatar_url", sa.String(500), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("last_login_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
@@ -118,7 +118,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_lead_sources_organization_id", "lead_sources", ["organization_id"])
@@ -131,8 +131,8 @@ def upgrade() -> None:
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("entity_type", sa.String(20), nullable=False, server_default="opportunity"),
-        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
     )
@@ -153,7 +153,7 @@ def upgrade() -> None:
         sa.Column("stage_type", sa.String(20), nullable=False, server_default="open"),
         sa.Column("entry_requirements", sa.Text(), nullable=True),
         sa.Column("exit_requirements", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
     )
@@ -205,7 +205,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_lost_reasons_organization_id", "lost_reasons", ["organization_id"])
@@ -318,7 +318,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("trigger_event", sa.String(100), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("max_depth", sa.Integer(), nullable=False, server_default="5"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
@@ -358,9 +358,9 @@ def upgrade() -> None:
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("field_type", sa.String(30), nullable=False),
         sa.Column("options_json", sa.Text(), nullable=True),
-        sa.Column("is_required", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_required", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("position", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_custom_field_defs_org_entity", "custom_field_definitions", ["organization_id", "entity_type"])
@@ -391,7 +391,7 @@ def upgrade() -> None:
         sa.Column("notification_type", sa.String(50), nullable=False),
         sa.Column("entity_type", sa.String(50), nullable=True),
         sa.Column("entity_id", sa.String(36), nullable=True),
-        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_notifications_user_id_read", "notifications", ["user_id", "is_read"])

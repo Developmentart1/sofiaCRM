@@ -1,12 +1,15 @@
 """Reports module tests — KPIs exact values, summary range filter, performance
 per user, and the dashboard's recent/upcoming/stuck endpoints."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
 
 from core.database import SessionLocal
+from core.tenant import org_scope
+from modules.opportunities.domain import Opportunity
+from modules.reports.service import ReportService
 
 import helpers as h
 
@@ -189,8 +192,25 @@ def test_recent_activities_endpoint(client):
     db.close()
 
     headers = _headers(h.make_token(org, user))
-    client.post("/api/v1/activities", json={"type": "call", "subject": "older"}, headers=headers)
-    client.post("/api/v1/activities", json={"type": "note", "subject": "latest"}, headers=headers)
+    # Explicit occurred_at: the Windows clock ticks every ~2ms, so two rapid
+    # creates can tie on occurred_at AND created_at and make ORDER BY ambiguous.
+    base = _now() - timedelta(hours=2)
+    r1 = client.post(
+        "/api/v1/activities",
+        json={"type": "call", "subject": "older", "occurred_at": base.isoformat()},
+        headers=headers,
+    )
+    assert r1.status_code == 201, r1.text
+    r2 = client.post(
+        "/api/v1/activities",
+        json={
+            "type": "note",
+            "subject": "latest",
+            "occurred_at": (base + timedelta(hours=1)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert r2.status_code == 201, r2.text
 
     resp = client.get("/api/v1/activities/recent", params={"limit": 1}, headers=headers)
     assert resp.status_code == 200, resp.text
@@ -240,3 +260,304 @@ def test_stuck_opportunities_endpoint(client):
     names = [o["name"] for o in resp.json()]
     assert "stuck" in names
     assert "fresh" not in names
+
+
+def test_summary_includes_boundary_dates(client):
+    """Una oportunidad cerrada exactamente en los límites del período se incluye."""
+    db = SessionLocal()
+    org = h.insert_org(db)
+    user = h.insert_user(db, org, role="admin")
+    pipe, stages = _seed_pipeline(db, org)
+
+    fecha_inicio = date(2026, 3, 15)
+    lower_bound = datetime.combine(fecha_inicio, time.min)
+    upper_bound = datetime.combine(fecha_inicio, time.max)
+    db.add_all(
+        [
+            Opportunity(
+                organization_id=org,
+                pipeline_id=pipe,
+                stage_id=stages["won"],
+                name="won-lower",
+                status="won",
+                estimated_value=1000,
+                won_value=1000,
+                closed_at=lower_bound,
+                assigned_user_id=user,
+            ),
+            Opportunity(
+                organization_id=org,
+                pipeline_id=pipe,
+                stage_id=stages["won"],
+                name="won-upper",
+                status="won",
+                estimated_value=2000,
+                won_value=2000,
+                closed_at=upper_bound,
+                assigned_user_id=user,
+            ),
+        ]
+    )
+    db.commit()
+
+    with org_scope(org):
+        result = ReportService(db).summary(from_=fecha_inicio, to=fecha_inicio)
+
+    assert result.total_revenue == 3000.0
+    # Also verify pipeline breakdown includes both boundary opps
+    assert result.revenue_by_pipeline[0].revenue == 3000.0
+    db.close()
+
+
+def test_kpis_boundary_velocity_window(client):
+    """Won opp cerrada EXACTAMENTE en velocity_window_start debe incluirse en pipeline_velocity."""
+    from freezegun import freeze_time
+    from modules.opportunities.domain import Opportunity as OppModel
+    from modules.reports.service import _VELOCITY_WINDOW_DAYS
+
+    frozen = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    with freeze_time(frozen):
+        db = SessionLocal()
+        org = h.insert_org(db)
+        user = h.insert_user(db, org, role="admin")
+        pipe, stages = _seed_pipeline(db, org)
+
+        velocity_start = frozen - timedelta(days=_VELOCITY_WINDOW_DAYS)
+        db.add(OppModel(
+            organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+            name="boundary-velocity", status="won",
+            estimated_value=100, won_value=100,
+            closed_at=velocity_start, assigned_user_id=user,
+        ))
+        db.commit()
+
+        with org_scope(org):
+            k = ReportService(db).kpis()
+
+        assert k.pipeline_velocity > 0, (
+            f"velocity={k.pipeline_velocity}, boundary opp at {velocity_start} excluded"
+        )
+        db.close()
+
+
+def test_kpis_boundary_month_start(client):
+    """Contact creado EXACTAMENTE en month_start debe incluirse en contacts_added_this_month."""
+    from freezegun import freeze_time
+    from modules.contacts.domain import Contact as ContactModel
+
+    frozen = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    with freeze_time(frozen):
+        db = SessionLocal()
+        org = h.insert_org(db)
+        user = h.insert_user(db, org, role="admin")
+
+        month_start = frozen.date().replace(day=1)
+        month_start_dt = datetime.combine(month_start, time.min)
+        db.add(ContactModel(
+            organization_id=org, type="PF",
+            first_name="Boundary", last_name="Contact",
+            created_at=month_start_dt, updated_at=month_start_dt,
+        ))
+        db.commit()
+
+        with org_scope(org):
+            k = ReportService(db).kpis()
+
+        assert k.contacts_added_this_month >= 1, (
+            f"contacts={k.contacts_added_this_month}, boundary contact at {month_start_dt} excluded"
+        )
+        db.close()
+
+
+def test_pipeline_distribution_excludes_inactive_stages(client):
+    """Una etapa con is_active=False no debe aparecer en la distribución."""
+    db = SessionLocal()
+    org = h.insert_org(db)
+    user = h.insert_user(db, org, role="admin")
+    pipe, stages = _seed_pipeline(db, org)
+
+    inactive_stage_id = uuid4().hex
+    db.execute(
+        sa.text(
+            "INSERT INTO pipeline_stages (id, organization_id, pipeline_id, name, position, "
+            "probability, stage_type, is_active, created_at, updated_at) "
+            "VALUES (:id, :org, :pipe, :name, :pos, :prob, :stype, 0, :t, :t)"
+        ),
+        {
+            "id": inactive_stage_id,
+            "org": org,
+            "pipe": pipe,
+            "name": "Archived Stage",
+            "pos": 99,
+            "prob": 0,
+            "stype": "open",
+            "t": _now(),
+        },
+    )
+    _insert_opportunity(db, org, pipe, inactive_stage_id, name="opp-archived", status="open", estimated=500)
+    db.commit()
+
+    with org_scope(org):
+        result = ReportService(db).pipeline_distribution()
+
+    stage_names = [s["stage_name"] for s in result]
+    assert "Archived Stage" not in stage_names
+    db.close()
+
+
+def test_kpis_boundary_won_this_month(client):
+    """Won opp cerrada EXACTAMENTE en month_start debe contar en opportunities_won_this_month."""
+    from freezegun import freeze_time
+    from modules.opportunities.domain import Opportunity as OppModel
+
+    frozen = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    with freeze_time(frozen):
+        db = SessionLocal()
+        org = h.insert_org(db)
+        user = h.insert_user(db, org, role="admin")
+        pipe, stages = _seed_pipeline(db, org)
+
+        month_start_dt = datetime.combine(frozen.date().replace(day=1), time.min)
+        db.add(OppModel(
+            organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+            name="boundary-won-month", status="won",
+            estimated_value=100, won_value=100,
+            closed_at=month_start_dt, assigned_user_id=user,
+        ))
+        db.commit()
+
+        with org_scope(org):
+            k = ReportService(db).kpis()
+
+        assert k.opportunities_won_this_month >= 1, (
+            f"won_this_month={k.opportunities_won_this_month}, boundary opp "
+            f"closed exactly at {month_start_dt} excluded"
+        )
+        db.close()
+
+
+def test_summary_boundary_revenue_by_owner(client):
+    """Won opps cerradas EXACTAMENTE en from_dt y to_dt deben sumar en revenue_by_owner."""
+    from modules.opportunities.domain import Opportunity as OppModel
+
+    db = SessionLocal()
+    org = h.insert_org(db)
+    user = h.insert_user(db, org, role="admin")
+    pipe, stages = _seed_pipeline(db, org)
+
+    from_date = date(2026, 6, 1)
+    to_date = date(2026, 6, 30)
+    db.add(OppModel(
+        organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+        name="at-from", status="won", estimated_value=100, won_value=100,
+        closed_at=datetime.combine(from_date, time.min), assigned_user_id=user,
+    ))
+    db.add(OppModel(
+        organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+        name="at-to", status="won", estimated_value=200, won_value=200,
+        closed_at=datetime.combine(to_date, time.max), assigned_user_id=user,
+    ))
+    db.commit()
+
+    with org_scope(org):
+        s = ReportService(db).summary(from_=from_date, to=to_date)
+
+    by_owner = {r.user_id: r for r in s.revenue_by_owner}
+    assert user in by_owner, "boundary opps excluded from revenue_by_owner"
+    assert by_owner[user].revenue == 300.0, (
+        f"revenue={by_owner[user].revenue}, expected 300.0 "
+        f"(opps closed exactly on from/to boundary)"
+    )
+    db.close()
+
+
+def test_performance_boundary_window(client):
+    """Won/activity/task EXACTAMENTE en los límites del rango deben contarse en performance."""
+    from modules.activities.domain import Activity as ActivityModel
+    from modules.opportunities.domain import Opportunity as OppModel
+    from modules.tasks.domain import Task as TaskModel
+
+    db = SessionLocal()
+    org = h.insert_org(db)
+    user = h.insert_user(db, org, role="admin")
+    pipe, stages = _seed_pipeline(db, org)
+
+    from_date = date(2026, 6, 1)
+    to_date = date(2026, 6, 30)
+    from_dt = datetime.combine(from_date, time.min)
+    to_dt = datetime.combine(to_date, time.max)
+
+    db.add(OppModel(
+        organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+        name="w-from", status="won", estimated_value=100, won_value=100,
+        closed_at=from_dt, assigned_user_id=user,
+    ))
+    db.add(OppModel(
+        organization_id=org, pipeline_id=pipe, stage_id=stages["won"],
+        name="w-to", status="won", estimated_value=200, won_value=200,
+        closed_at=to_dt, assigned_user_id=user,
+    ))
+    db.add(ActivityModel(
+        organization_id=org, user_id=user, type="note",
+        subject="at-from", occurred_at=from_dt,
+    ))
+    db.add(ActivityModel(
+        organization_id=org, user_id=user, type="note",
+        subject="at-to", occurred_at=to_dt,
+    ))
+    db.add(TaskModel(
+        organization_id=org, assigned_user_id=user, title="t-from",
+        status="completed", completed_at=from_dt,
+    ))
+    db.add(TaskModel(
+        organization_id=org, assigned_user_id=user, title="t-to",
+        status="completed", completed_at=to_dt,
+    ))
+    db.commit()
+
+    with org_scope(org):
+        perf = ReportService(db).performance(from_=from_date, to=to_date)
+
+    row = next((r for r in perf if r.user_id == user), None)
+    assert row is not None, "user missing from performance"
+    assert row.opportunities_won == 2, (
+        f"won={row.opportunities_won}, expected 2 (boundary closed_at excluded)"
+    )
+    assert row.activities_logged == 2, (
+        f"activities={row.activities_logged}, expected 2 (boundary occurred_at excluded)"
+    )
+    assert row.tasks_completed == 2, (
+        f"tasks={row.tasks_completed}, expected 2 (boundary completed_at excluded)"
+    )
+    db.close()
+
+
+def test_pipeline_trend_boundary_last_day(client):
+    """Opp abierta creada EXACTAMENTE en el cierre del último día debe contar en el trend."""
+    from freezegun import freeze_time
+    from modules.opportunities.domain import Opportunity as OppModel
+
+    frozen = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    with freeze_time(frozen):
+        db = SessionLocal()
+        org = h.insert_org(db)
+        user = h.insert_user(db, org, role="admin")
+        pipe, stages = _seed_pipeline(db, org)
+
+        created_at = datetime.combine(frozen.date(), time.max)
+        db.add(OppModel(
+            organization_id=org, pipeline_id=pipe, stage_id=stages["open"],
+            name="trend-boundary", status="open", estimated_value=5000,
+            created_at=created_at, assigned_user_id=user,
+        ))
+        db.commit()
+
+        with org_scope(org):
+            trend = ReportService(db).pipeline_trend(days=3)
+
+        assert float(trend[-1]["value"]) == 5000.0, (
+            f"last day value={trend[-1]['value']}, opp created exactly at "
+            f"{created_at} excluded"
+        )
+        assert float(trend[0]["value"]) == 0.0, "value leaks into days before creation"
+        db.close()

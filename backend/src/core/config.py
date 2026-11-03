@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
 
     # Environment
-    env: str = Field(default="development")
+    env: str = Field(default="production")
 
     @model_validator(mode="after")
     def _reject_default_secrets_outside_dev(self) -> "Settings":

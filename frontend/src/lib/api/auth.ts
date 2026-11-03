@@ -9,13 +9,34 @@ export interface AuthResponse {
   user: User;
 }
 
+export function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return slug.length >= 2 ? slug : `org-${Date.now()}`;
+}
+
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthResponse> {
     return api.post<AuthResponse>("/api/users/login", payload);
   },
 
-  async signup(payload: SignupPayload): Promise<void> {
-    await api.post("/api/organizations/bootstrap", payload);
+  async signup(payload: SignupPayload): Promise<{ slug: string }> {
+    // El backend exige OrganizationCreate (name, slug, admin_email, ...) con
+    // extra="forbid"; el slug se deriva del nombre de la organización.
+    const slug = slugify(payload.organization_name);
+    await api.post("/api/organizations/bootstrap", {
+      name: payload.organization_name.trim(),
+      slug,
+      admin_email: payload.email.trim(),
+      admin_password: payload.password,
+      admin_full_name: payload.full_name.trim(),
+    });
+    return { slug };
   },
 
   async logout(): Promise<void> {

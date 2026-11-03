@@ -70,8 +70,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Hola, {user?.full_name?.split(" ")[0] ?? "equipo"} 👋</h1>
-        <p className="text-sm text-muted-foreground">Esto es lo que está pasando hoy.</p>
+        <h1 className="text-3xl font-black tracking-tight">Hola, {user?.full_name?.split(" ")[0] ?? "equipo"}.</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Resumen operativo de tu equipo para hoy.</p>
       </div>
 
       <KpiGrid kpis={kpis} loading={loading} />

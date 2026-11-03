@@ -62,9 +62,14 @@ export function useAuth() {
   const signup = useCallback(async (payload: SignupPayload) => {
     setState({ ...memoryState, loading: true, error: null });
     try {
-      await authApi.signup(payload);
-      // Account created but not signed in — the cookie is only set on login.
-      setState({ user: null, loading: false, error: null });
+      const { slug } = await authApi.signup(payload);
+      // La cookie solo se setea en login: autenticamos para no rebotar al login.
+      const session = await authApi.login({
+        organization_slug: slug,
+        email: payload.email,
+        password: payload.password,
+      });
+      setState({ user: session.user, loading: false, error: null });
       toast.success("Cuenta creada");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al crear la cuenta";

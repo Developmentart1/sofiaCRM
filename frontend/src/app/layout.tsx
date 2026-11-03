@@ -5,8 +5,8 @@ import { ThemeProvider } from "@/components/layout/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "CRM-Splash",
-  description: "CRM moderno, rápido y enfocado en ventas",
+  title: "CRM Sofia",
+  description: "Centro operativo comercial de Sofia",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

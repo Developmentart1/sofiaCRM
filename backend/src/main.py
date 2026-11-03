@@ -71,6 +71,11 @@ def create_app() -> FastAPI:
 
     app.add_middleware(OrgContextMiddleware)
 
+    # Security guard: detección + respuesta inicial (ver core/security_guard.py).
+    from core.security_guard import SecurityGuardMiddleware
+
+    app.add_middleware(SecurityGuardMiddleware)
+
     # Register implemented modules (order: dependencies first)
     from modules.organizations import register_module as register_orgs
     from modules.users import register_module as register_users
@@ -92,6 +97,9 @@ def create_app() -> FastAPI:
 
     from modules.activities import register_module as register_activities
     register_activities(app, bus)
+
+    from modules.arm import register_module as register_arm
+    register_arm(app, bus)
 
     from modules.automations import register_module as register_automations
     register_automations(app, bus)

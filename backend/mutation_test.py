@@ -68,6 +68,12 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         "if False:  # MUTANT: skip stage-pipeline validation",
         "create_opportunity skips stage-pipeline validation",
     ),
+    (
+        "src/core/pagination.py",
+        r"return \(self\.page - 1\) \* self\.page_size",
+        "return self.page * self.page_size  # MUTANT: off-by-one in offset",
+        "PageParams.offset off-by-one (page 2 starts at 2*page_size)",
+    ),
 ]
 
 
@@ -95,7 +101,7 @@ def restore_file(file_path: str, original: str) -> None:
 def run_tests() -> tuple[bool, str]:
     """Run pytest and return (passed, output)."""
     result = subprocess.run(
-        [".venv/Scripts/python.exe", "-m", "pytest", "tests/", "-q", "--tb=no"],
+        [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent,

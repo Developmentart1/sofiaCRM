@@ -56,13 +56,13 @@ export function Sidebar() {
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "hidden md:flex h-screen flex-col border-r bg-card transition-[width] duration-200",
+          "hidden md:flex h-screen flex-col border-r bg-secondary transition-[width] duration-200",
           collapsed ? "w-16" : "w-60"
         )}
         aria-label="Navegación principal"
       >
-        <div className="flex h-14 items-center gap-2 border-b px-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
+        <div className="flex h-16 items-center gap-3 border-b border-foreground/15 px-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-primary text-primary-foreground font-black">
             C
           </div>
           {!collapsed && <span className="truncate text-sm font-semibold">{APP_NAME}</span>}
@@ -78,10 +78,10 @@ export function Sidebar() {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
+                    "flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm transition-colors",
                     active
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      ? "border-primary bg-white text-foreground font-bold"
+                      : "text-muted-foreground hover:border-foreground/20 hover:bg-white/70 hover:text-foreground"
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -4,47 +4,47 @@
 
 :root {
   --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  --foreground: 204 28% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 204 28% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 238 84% 67%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 238 84% 67%;
-  --radius: 0.5rem;
+  --popover-foreground: 204 28% 13%;
+  --primary: 18 78% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 201 24% 95%;
+  --secondary-foreground: 204 28% 13%;
+  --muted: 201 24% 95%;
+  --muted-foreground: 202 20% 39%;
+  --accent: 201 24% 95%;
+  --accent-foreground: 204 28% 13%;
+  --destructive: 0 48% 49%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 201 20% 82%;
+  --input: 201 20% 82%;
+  --ring: 18 78% 54%;
+  --radius: 0rem;
 }
 
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 5.5%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 5.5%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 238 84% 67%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 238 84% 67%;
+  --background: 204 28% 9%;
+  --foreground: 201 24% 95%;
+  --card: 204 27% 12%;
+  --card-foreground: 201 24% 95%;
+  --popover: 204 27% 12%;
+  --popover-foreground: 201 24% 95%;
+  --primary: 18 83% 64%;
+  --primary-foreground: 204 28% 9%;
+  --secondary: 204 27% 15%;
+  --secondary-foreground: 201 24% 95%;
+  --muted: 204 27% 15%;
+  --muted-foreground: 201 18% 72%;
+  --accent: 204 27% 15%;
+  --accent-foreground: 201 24% 95%;
+  --destructive: 0 55% 62%;
+  --destructive-foreground: 204 28% 9%;
+  --border: 202 20% 28%;
+  --input: 202 20% 28%;
+  --ring: 18 83% 64%;
 }
 
 @theme inline {
@@ -68,47 +68,34 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius);
 }
 
-* {
-  border-color: hsl(var(--border));
-}
+* { border-color: hsl(var(--border)); }
 
-html,
-body {
+html, body {
   height: 100%;
-  background-color: hsl(var(--background));
+  background: hsl(var(--background));
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
 }
 
-*:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
+button, a, input, select, textarea { transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out; }
+button:active:not(:disabled) { transform: translateY(1px); }
+*:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }

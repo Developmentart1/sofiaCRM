@@ -171,3 +171,12 @@ def test_org_isolation_write_denied(client):
         headers=headers_b,
     )
     assert resp.status_code == 404, resp.text
+
+
+def test_invalid_role_is_denied():
+    """Un rol inexistente debe retornar False y lanzar ForbiddenError."""
+    from core.rbac import role_has, require_permission, Permission, ForbiddenError
+
+    assert role_has("rol_inexistente", Permission.CONTACT_READ) is False
+    with pytest.raises(ForbiddenError):
+        require_permission("rol_inexistente", Permission.CONTACT_READ)

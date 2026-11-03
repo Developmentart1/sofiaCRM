@@ -25,7 +25,13 @@ WRONG = "WrongPassword123!"
 NEW = "NewPassword123!"
 
 
-def _seed(db, *, email: str | None = None, role: str = "admin") -> dict[str, str]:
+def _seed(
+    db,
+    *,
+    email: str | None = None,
+    role: str = "admin",
+    is_active: bool = True,
+) -> dict[str, str]:
     org_id = str(uuid4())
     user_id = str(uuid4())
     slug = f"auth-{uuid4().hex[:8]}"
@@ -41,12 +47,12 @@ def _seed(db, *, email: str | None = None, role: str = "admin") -> dict[str, str
     db.execute(
         sa.text(
             "INSERT INTO users (id, organization_id, email, email_normalized, full_name, "
-            "password_hash, role, created_at, updated_at) "
-            "VALUES (:i, :o, :e, :en, :n, :p, :r, :t, :t)"
+            "password_hash, role, is_active, created_at, updated_at) "
+            "VALUES (:i, :o, :e, :en, :n, :p, :r, :active, :t, :t)"
         ),
         {
             "i": user_id, "o": org_id, "e": email, "en": email.lower(), "n": "Auth User",
-            "p": hash_password(PASSWORD), "r": role, "t": now,
+            "p": hash_password(PASSWORD), "r": role, "active": is_active, "t": now,
         },
     )
     db.commit()
@@ -171,3 +177,13 @@ def test_change_password_wrong_then_correct(client):
     # Login now works with the NEW password (and fails with the old one).
     assert _login(client, ctx, password=NEW).status_code == 200
     assert _login(client, ctx, password=PASSWORD).status_code == 401
+
+
+def test_login_rejects_inactive_user(client):
+    db = SessionLocal()
+    ctx = _seed(db, is_active=False)
+    db.close()
+
+    resp = _login(client, ctx)
+    assert resp.status_code == 401, resp.text
+    assert "access_token=" not in resp.headers.get("set-cookie", "")

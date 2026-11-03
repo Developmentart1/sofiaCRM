@@ -124,3 +124,66 @@ def test_close_lost_requires_reason(ctx):
         assert resp.status_code in (400, 422), f"Expected 400/422, got {resp.status_code}: {resp.text}"
 
     app.dependency_overrides.clear()
+
+
+def test_update_opportunity_recalculates_weighted_value(ctx):
+    """RB-010: cambiar estimated_value debe recalcular weighted_value."""
+    from core.tenant import org_scope
+    from modules.opportunities.schemas import OpportunityCreate, OpportunityUpdate
+    from modules.opportunities.service import OpportunityService
+
+    db = SessionLocal()
+    _seed(db, ctx)
+    with org_scope(ctx["org"]):
+        svc = OpportunityService(db)
+        opp = svc.create_opportunity(OpportunityCreate(
+            pipeline_id=ctx["pipe"],
+            stage_id=ctx["stage_open"],
+            name="Weighted Opp",
+            estimated_value=10000,
+            contact_id=ctx["contact"],
+        ))
+        assert float(opp.weighted_value) == 3000.0
+
+        updated = svc.update_opportunity(
+            opp.id, OpportunityUpdate(estimated_value=20000)
+        )
+        assert float(updated.weighted_value) == 6000.0, (
+            f"weighted_value={updated.weighted_value}, expected 6000.0 "
+            "after estimated_value change (RB-010)"
+        )
+    db.close()
+
+
+def test_create_opportunity_rejects_stage_from_other_pipeline(ctx):
+    """RB-004: create must reject a stage that belongs to another pipeline."""
+    from core.errors import ValidationError
+    from core.tenant import org_scope
+    from modules.opportunities.schemas import OpportunityCreate
+    from modules.opportunities.service import OpportunityService
+
+    other_pipe = str(uuid4())
+    other_stage = str(uuid4())
+
+    db = SessionLocal()
+    _seed(db, ctx)
+    db.execute(sa.text(
+        "INSERT INTO pipelines (id,organization_id,name,created_at,updated_at) VALUES (:i,:o,'Other P',:n,:n)"
+    ), {"i": other_pipe, "o": ctx["org"], "n": _now})
+    db.execute(sa.text(
+        "INSERT INTO pipeline_stages (id,organization_id,pipeline_id,name,position,probability,stage_type,created_at,updated_at) "
+        "VALUES (:i,:o,:p,'Other Stage',0,30,'open',:t,:t)"
+    ), {"i": other_stage, "o": ctx["org"], "p": other_pipe, "t": _now})
+    db.commit()
+
+    with org_scope(ctx["org"]):
+        svc = OpportunityService(db)
+        with pytest.raises(ValidationError):
+            svc.create_opportunity(OpportunityCreate(
+                pipeline_id=ctx["pipe"],
+                stage_id=other_stage,
+                name="Cross-pipeline Opp",
+                estimated_value=1000,
+                contact_id=ctx["contact"],
+            ))
+    db.close()

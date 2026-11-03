@@ -11,7 +11,7 @@ documented inline and in ``docs/fase3-informe.md``:
 """
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from core.tenant import current_org_id
@@ -217,20 +217,6 @@ class ReportService:
         from_dt = datetime.combine(from_date, time.min)
         to_dt = datetime.combine(to_date, time.max)
 
-        base = (
-            self.db.query(Opportunity)
-            .filter(
-                Opportunity.organization_id == org,
-                Opportunity.deleted_at.is_(None),
-                Opportunity.status == "won",
-                Opportunity.closed_at.isnot(None),
-                Opportunity.closed_at >= from_dt,
-                Opportunity.closed_at <= to_dt,
-            )
-        )
-        if pipeline_id:
-            base = base.filter(Opportunity.pipeline_id == pipeline_id)
-
         total_revenue = (
             self.db.query(func.coalesce(func.sum(_won_value_expr()), 0))
             .filter(
@@ -420,45 +406,51 @@ class ReportService:
     # ── Pipeline Trend ─────────────────────────────────────────
 
     def pipeline_trend(self, days: int = 7) -> list[dict]:
-        """Return pipeline value trend for the last N days."""
+        """Open pipeline value at the close of each of the last N days.
+
+        Cumulative (running total), not per-day increments: per-day created
+        value is 0 on any day without new deals, which makes the chart a flat
+        line. Cumulative answers "how big is the open pipeline today".
+        """
         org = self._org()
         today = _today()
         start_date = today - timedelta(days=days - 1)
 
-        # Get daily created opportunity values
-        daily_values = (
-            self.db.query(
-                func.date(Opportunity.created_at).label("date"),
-                func.coalesce(func.sum(Opportunity.estimated_value), 0).label("value"),
-            )
+        rows = (
+            self.db.query(Opportunity.created_at, _won_value_expr())
             .filter(
                 Opportunity.organization_id == org,
                 Opportunity.deleted_at.is_(None),
-                Opportunity.created_at >= datetime.combine(start_date, time.min),
-                Opportunity.created_at <= datetime.combine(today, time.max),
+                Opportunity.status == "open",
+                Opportunity.created_at <= datetime.combine(today, time.max, tzinfo=timezone.utc),
             )
-            .group_by(func.date(Opportunity.created_at))
-            .order_by(func.date(Opportunity.created_at))
             .all()
         )
 
-        # Fill in missing days with 0
         result = []
         for day in range(days):
             current_date = start_date + timedelta(days=day)
-            date_str = current_date.isoformat()
-            value = next(
-                (float(d.value) for d in daily_values if d.date == current_date),
-                0.0,
+            # Both sides must be tz-aware: PostgreSQL/seeded rows return aware
+            # created_at while SQLite returns naive (ORM-created rows), and
+            # mixing them raises TypeError. Normalize created to UTC.
+            cutoff = datetime.combine(current_date, time.max).replace(tzinfo=timezone.utc)
+            total = sum(
+                float(value or 0)
+                for created, value in rows
+                if (created if created.tzinfo else created.replace(tzinfo=timezone.utc)) <= cutoff
             )
-            result.append({"date": date_str, "value": value})
+            result.append({"date": current_date.isoformat(), "value": total})
 
         return result
 
     # ── Pipeline Distribution ──────────────────────────────────
 
     def pipeline_distribution(self) -> list[dict]:
-        """Return opportunity count distribution by pipeline stage."""
+        """Opportunity count per pipeline stage, every active stage included.
+
+        OUTER join from Stage: an inner join silently drops empty stages, so a
+        board with one populated column renders as a one-bar chart.
+        """
         org = self._org()
 
         stage_counts = (
@@ -466,13 +458,16 @@ class ReportService:
                 Stage.name.label("stage_name"),
                 func.count(Opportunity.id).label("count"),
             )
-            .join(Opportunity, Opportunity.stage_id == Stage.id)
-            .filter(
-                Opportunity.organization_id == org,
-                Opportunity.deleted_at.is_(None),
-                Opportunity.status == "open",
+            .outerjoin(
+                Opportunity,
+                and_(
+                    Opportunity.stage_id == Stage.id,
+                    Opportunity.organization_id == org,
+                    Opportunity.deleted_at.is_(None),
+                ),
             )
-            .group_by(Stage.name)
+            .filter(Stage.organization_id == org, Stage.is_active.is_(True))
+            .group_by(Stage.id, Stage.name, Stage.position)
             .order_by(Stage.position)
             .all()
         )

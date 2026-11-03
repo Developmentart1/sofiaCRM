@@ -109,3 +109,16 @@ def test_login_works(client):
     })
     # may fail because user is not in the real DB (test uses in-memory) — expected 400/404
     assert resp.status_code in (200, 400, 404, 422)
+
+
+def test_current_org_id_raises_when_org_not_set():
+    """current_org_id() must raise when no org is bound to the context."""
+    import core.tenant as tenant
+    from core.errors import OrganizationBoundaryError
+
+    token = tenant._current_org_id.set(None)
+    try:
+        with pytest.raises(OrganizationBoundaryError):
+            tenant.current_org_id()
+    finally:
+        tenant._current_org_id.reset(token)

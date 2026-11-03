@@ -1,8 +1,6 @@
 "use client";
 
-import * as React from "react";
-import { Bell, Search, Sun, Moon, Plus } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Bell, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,30 +16,11 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { initials } from "@/lib/utils/format";
 import Link from "next/link";
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
-  if (!mounted) {
-    return <Button variant="ghost" size="icon" aria-label="Cambiar tema" className="h-9 w-9" />;
-  }
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="Cambiar tema"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-    >
-      {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </Button>
-  );
-}
-
 export function Topbar() {
   const { user } = useAuth();
 
   return (
-    <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
+    <header className="flex h-16 items-center gap-3 border-b bg-background px-6">
       <div className="relative max-w-md flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input placeholder="Buscar contactos, empresas, oportunidades..." className="pl-8" aria-label="Búsqueda global" />
@@ -70,7 +49,6 @@ export function Topbar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <ThemeToggle />
         <Button variant="ghost" size="icon" aria-label="Notificaciones">
           <Bell className="h-4 w-4" />
         </Button>
@@ -87,7 +65,7 @@ export function Topbar() {
               <div className="flex flex-col">
                 <span className="text-sm font-medium">{user?.full_name ?? "Usuario"}</span>
                 <span className="text-xs text-muted-foreground">{user?.email}</span>
-                <span className="mt-1 text-xs text-muted-foreground">CRM Splash</span>
+                <span className="mt-1 text-xs text-muted-foreground">CRM Sofia</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

@@ -21,7 +21,7 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -174,8 +174,8 @@ def _insert_lost_reasons(conn, org_id: str, now: datetime) -> list[str]:
 def _insert_pipeline(conn, org_id: str, name: str, now: datetime) -> tuple[str, list[str]]:
     pipe_id = _hid()
     conn.execute(
-        sa.text("INSERT INTO pipelines (id, organization_id, name, is_default, created_at, updated_at) VALUES (:i,:o,:n,1,:t,:t)"),
-        {"i": pipe_id, "o": org_id, "n": name, "t": now},
+        sa.text("INSERT INTO pipelines (id, organization_id, name, is_default, created_at, updated_at) VALUES (:i,:o,:n,:dflt,:t,:t)"),
+        {"i": pipe_id, "o": org_id, "n": name, "dflt": True, "t": now},
     )
     stage_ids: list[str] = []
     for sname, desc, pos, color, max_d, prob in PIPELINE_STAGES:
@@ -265,7 +265,7 @@ def _insert_opportunities(
              "p": pipe_id, "s": s, "n": f"Oportunidad Demo {i}",
              "ev": 50000.0 * i, "wv": 50000.0 * i * 0.3, "prob": 30,
              "pri": "medium", "st": status, "src": source_ids[i % len(source_ids)],
-             "ecd": today.replace(month=((today.month + i) % 12) or 12) if status == "open" else today,
+             "ecd": today + timedelta(days=30 * i) if status == "open" else today,
              "ca": closed_at, "wv2": wv,
              "lr": reason_ids[i % len(reason_ids)] if status == "lost" else None,
              "a": user_ids["asesor"] if i <= max(1, count // 2) else user_ids["admin"], "t": now},
@@ -281,10 +281,10 @@ def _insert_automation_rules(conn, org_id: str, user_ids: dict[str, str], now: d
             sa.text(
                 "INSERT INTO automation_rules (id, organization_id, name, description, trigger_event, "
                 "is_active, max_depth, conditions_json, created_at, updated_at) "
-                "VALUES (:i,:o,:n,:d,:t,1,5,:c,:ts,:ts)"
+                "VALUES (:i,:o,:n,:d,:t,:act,:md,:c,:ts,:ts)"
             ),
             {"i": rule_id, "o": org_id, "n": name, "d": description, "t": trigger,
-             "c": json.dumps(conditions), "ts": now},
+             "act": True, "md": 5, "c": json.dumps(conditions), "ts": now},
         )
         for position, (action_type, config) in enumerate(actions):
             if "__ASESOR__" in json.dumps(config):
@@ -336,6 +336,122 @@ def _seed_org(
     }
 
 
+def _insert_tasks(
+    conn, org_id: str, contact_ids: list[str], user_ids: dict[str, str], count: int,
+    today: date, now: datetime,
+) -> int:
+    """Tareas variadas: vencidas, de hoy y futuras (dashboard las agrupa)."""
+    statuses = ("pending", "pending", "in_progress", "completed")
+    for i in range(1, count + 1):
+        st = statuses[i % len(statuses)]
+        due = today - timedelta(days=i % 4) if i % 3 == 0 else today + timedelta(days=i)
+        conn.execute(
+            sa.text(
+                "INSERT INTO tasks (id, organization_id, contact_id, assigned_user_id, title, "
+                "description, priority, status, due_date, completed_at, created_at, updated_at) "
+                "VALUES (:i,:o,:c,:a,:t,:d,:p,:s,:dd,:ca,:t2,:t2)"
+            ),
+            {"i": _hid(), "o": org_id, "c": contact_ids[i % len(contact_ids)],
+             "a": user_ids["asesor"] if i % 2 else user_ids["admin"],
+             "t": f"Tarea {i}", "d": f"Seguimiento comercial {i}",
+             "p": ("high", "medium", "low")[i % 3], "s": st, "dd": due,
+             "ca": now if st == "completed" else None, "t2": now},
+        )
+    return count
+
+
+def _insert_activities(
+    conn, org_id: str, contact_ids: list[str], user_ids: dict[str, str], count: int,
+    now: datetime,
+) -> int:
+    kinds = ("call", "email", "meeting", "note")
+    for i in range(1, count + 1):
+        kind = kinds[i % len(kinds)]
+        occurred = now - timedelta(hours=i * 5)
+        conn.execute(
+            sa.text(
+                "INSERT INTO activities (id, organization_id, contact_id, user_id, type, subject, "
+                "body, occurred_at, duration_minutes, created_at) "
+                "VALUES (:i,:o,:c,:u,:t,:s,:b,:oc,:d,:t2)"
+            ),
+            {"i": _hid(), "o": org_id, "c": contact_ids[i % len(contact_ids)],
+             "u": user_ids["asesor"] if i % 2 else user_ids["admin"],
+             "t": kind, "s": f"{kind.capitalize()} con contacto {i}",
+             "b": "Registro de seguimiento generado por el seed.",
+             "oc": occurred, "d": 30, "t2": now},
+        )
+    return count
+
+
+def _seed_existing_org(
+    conn,
+    *,
+    slug: str,
+    companies: int,
+    contacts: int,
+    opportunities: int,
+    tasks: int,
+    activities: int,
+    industry: str,
+    now: datetime,
+    today: date,
+) -> dict[str, int] | None:
+    """Siembra datos en una org que YA existe (p. ej. la creada en el signup)."""
+    row = conn.execute(
+        sa.text("SELECT id FROM organizations WHERE slug = :s"), {"s": slug}
+    ).first()
+    if row is None:
+        print(f"   ✗ org '{slug}' no existe")
+        return None
+    org_id = row[0]
+
+    users = conn.execute(
+        sa.text("SELECT id, role FROM users WHERE organization_id = :o"), {"o": org_id}
+    ).fetchall()
+    if not users:
+        print(f"   ✗ org '{slug}' sin usuarios")
+        return None
+    admin_id = next((u[0] for u in users if u[1] == "admin"), users[0][0])
+    asesor_id = next((u[0] for u in users if u[1] == "asesor"), admin_id)
+    user_ids = {"admin": admin_id, "asesor": asesor_id}
+
+    # Idempotente para lead sources / lost reasons: solo si faltan.
+    source_ids = [r[0] for r in conn.execute(
+        sa.text("SELECT id FROM lead_sources WHERE organization_id = :o"), {"o": org_id})]
+    if not source_ids:
+        source_ids = _insert_lead_sources(conn, org_id, now)
+    reason_ids = [r[0] for r in conn.execute(
+        sa.text("SELECT id FROM lost_reasons WHERE organization_id = :o"), {"o": org_id})]
+    if not reason_ids:
+        reason_ids = _insert_lost_reasons(conn, org_id, now)
+
+    row = conn.execute(
+        sa.text("SELECT id FROM pipelines WHERE organization_id = :o AND is_default = :dflt"), {"o": org_id, "dflt": True}
+    ).first()
+    if row:
+        pipe_id = row[0]
+        stage_ids = [r[0] for r in conn.execute(
+            sa.text("SELECT id FROM pipeline_stages WHERE pipeline_id = :p ORDER BY position"),
+            {"p": pipe_id})]
+    else:
+        pipe_id, stage_ids = _insert_pipeline(conn, org_id, "Pipeline Principal", now)
+
+    company_ids = _insert_companies(conn, org_id, companies, industry, now)
+    contact_ids = _insert_contacts(conn, org_id, contacts, company_ids, user_ids, now)
+    _insert_opportunities(
+        conn, org_id, opportunities, contact_ids, company_ids, pipe_id, stage_ids,
+        source_ids, reason_ids, user_ids, today, now,
+    )
+    _insert_tasks(conn, org_id, contact_ids, user_ids, tasks, today, now)
+    _insert_activities(conn, org_id, contact_ids, user_ids, activities, now)
+    rules = _insert_automation_rules(conn, org_id, user_ids, now)
+    return {
+        "users": len(users), "companies": companies, "contacts": contacts,
+        "opportunities": opportunities, "tasks": tasks, "activities": activities,
+        "rules": rules,
+    }
+
+
 def _clean_db() -> None:
     """Drop every table (downgrade to base) and re-apply migrations."""
     from alembic import command
@@ -352,9 +468,20 @@ def _clean_db() -> None:
     command.upgrade(cfg, "head")
 
 
-def seed() -> None:
+def seed(only_slug: str | None = None) -> None:
     now = datetime.now(UTC)
     today = now.date()
+
+    if only_slug:
+        with engine.begin() as conn:
+            counts = _seed_existing_org(
+                conn, slug=only_slug, companies=10, contacts=30, opportunities=20,
+                tasks=12, activities=15, industry="Servicios Financieros",
+                now=now, today=today,
+            )
+        if counts:
+            print(f"✅ Org '{only_slug}' sembrada: {counts}")
+        return
 
     orgs = [
         {"name": "CRM Splash Demo", "slug": "crm-splash-demo", "users": USERS,
@@ -380,8 +507,9 @@ def seed() -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed CRM-Splash demo data (2 orgs).")
     parser.add_argument("--clean", action="store_true", help="recreate the schema from scratch before seeding")
+    parser.add_argument("--org", metavar="SLUG", help="seed an EXISTING org (e.g. the one from signup)")
     args = parser.parse_args()
     if args.clean:
         print("♻️  Recreando schema (alembic downgrade base → upgrade head)…")
         _clean_db()
-    seed()
+    seed(only_slug=args.org)

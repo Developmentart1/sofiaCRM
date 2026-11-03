@@ -83,3 +83,15 @@ temp/
 
 # Local git worktrees (contains a .git pointer file, never committable)
 .worktrees/
+
+# Security guard evidence (JSONL de hallazgos)
+security_evidence.jsonl
+*.evidence.jsonl
+
+# Storage / uploads locales
+storage/
+uploads/
+
+# Secrets
+*.pem
+*.key
