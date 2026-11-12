@@ -96,7 +96,13 @@ _MAX_REPLAY_BYTES = 1024 * 1024
 # Dependencias de auth de FastAPI: si una ruta las pide, requiere credenciales.
 _AUTH_DEPS = {"get_current_user", "require_permission"}
 _CSP_EXEMPT_PREFIXES = ("/docs", "/redoc", "/openapi.json")
-_PUBLIC_PATHS = {"/", "/api/health", "/openapi.json"}
+_PUBLIC_PATHS = {
+    "/",
+    "/api/health",
+    "/openapi.json",
+    "/api/v1/users/login",
+    "/api/v1/organizations/bootstrap",
+}
 
 _REDACTED = "[REDACTED]"
 _ISOLATED = "[CONTENIDO AISLADO]"
