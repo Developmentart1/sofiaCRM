@@ -19,7 +19,7 @@ frontend_pid=$!
 # tunnel: token lives in /app/data/.tunnel-token (mounted volume); no file, no tunnel
 tunnel_pid=""
 if [ -f /app/data/.tunnel-token ]; then
-  cloudflared tunnel --no-autoupdate run --token "$(cat /app/data/.tunnel-token)" &
+  (while true; do cloudflared tunnel --no-autoupdate run --token "$(cat /app/data/.tunnel-token)"; sleep 5; done) &
   tunnel_pid=$!
 fi
 
