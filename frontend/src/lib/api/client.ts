@@ -66,9 +66,12 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   const { method = "GET", body, query, signal, headers, cache, next } = options;
 
+  const normalizedPath = API_BASE_URL.endsWith("/api") && path.startsWith("/api/")
+    ? path.slice(4)
+    : path;
   const url = path.startsWith("http")
     ? `${path}${buildQuery(query)}`
-    : `${API_BASE_URL}${path}${buildQuery(query)}`;
+    : `${API_BASE_URL}${normalizedPath}${buildQuery(query)}`;
 
   const init: RequestInit = {
     method,
