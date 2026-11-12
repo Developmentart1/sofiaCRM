@@ -101,6 +101,7 @@ _PUBLIC_PATHS = {
     "/api/health",
     "/openapi.json",
     "/api/v1/users/login",
+    "/api/v1/users/login/company",
     "/api/v1/organizations/bootstrap",
 }
 

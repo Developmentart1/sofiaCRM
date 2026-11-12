@@ -91,5 +91,22 @@ class UserService:
         )
         return LoginResponse(access_token=token, user=UserRead.model_validate(user))
 
+    def login_company(self, organization_slug: str, password: str) -> LoginResponse:
+        """Login the organization's admin using company + password."""
+        org = OrganizationRepository(self.db).get_by_slug(organization_slug)
+        if not org.is_active:
+            raise UnauthorizedError("organization is inactive")
+        user = (
+            self.db.query(User)
+            .filter(User.organization_id == org.id, User.role == Role.ADMIN.value, User.is_active.is_(True))
+            .order_by(User.created_at.asc())
+            .first()
+        )
+        if user is None or not verify_password(password, user.password_hash):
+            raise UnauthorizedError("invalid company credentials")
+        self.repo.touch_login(user)
+        token = create_access_token(subject=user.id, organization_id=user.organization_id, role=user.role)
+        return LoginResponse(access_token=token, user=UserRead.model_validate(user))
+
     def get(self, user_id: str) -> UserRead:
         return UserRead.model_validate(self.repo.get(user_id))

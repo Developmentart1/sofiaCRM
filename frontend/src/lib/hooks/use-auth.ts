@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { authApi } from "@/lib/api/auth";
+import { ApiClientError } from "@/lib/api/client";
 import type { LoginPayload, SignupPayload, User } from "@/lib/types/api";
 import { toast } from "./use-toast";
 
@@ -63,7 +64,6 @@ export function useAuth() {
     setState({ ...memoryState, loading: true, error: null });
     try {
       const { slug } = await authApi.signup(payload);
-      // La cookie solo se setea en login: autenticamos para no rebotar al login.
       const session = await authApi.login({
         organization_slug: slug,
         email: payload.email,
@@ -72,6 +72,20 @@ export function useAuth() {
       setState({ user: session.user, loading: false, error: null });
       toast.success("Cuenta creada");
     } catch (err) {
+      if (err instanceof ApiClientError && err.status === 409) {
+        try {
+          const slug = authApi.slugify(payload.organization_name);
+          const session = await authApi.loginCompany({
+            organization_slug: slug,
+            password: payload.password,
+          });
+          setState({ user: session.user, loading: false, error: null });
+          toast.success("Sesión iniciada en la empresa existente");
+          return;
+        } catch {
+          err = new Error("La empresa ya existe, pero la contraseña no coincide. Usa Iniciar sesión.");
+        }
+      }
       const msg = err instanceof Error ? err.message : "Error al crear la cuenta";
       setState({ user: null, loading: false, error: msg });
       toast.error(msg);

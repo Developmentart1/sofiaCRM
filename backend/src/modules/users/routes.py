@@ -8,7 +8,7 @@ from core.config import get_settings
 from core.rbac import Permission, require_permission
 from modules.users.auth_deps import CurrentUser, get_current_user, get_db_session
 from modules.users.schemas import (
-    LoginRequest, LoginResponse, UserCreate, UserPasswordChange, UserRead,
+    LoginRequest, CompanyLoginRequest, LoginResponse, UserCreate, UserPasswordChange, UserRead,
 )
 from modules.users.service import UserService
 
@@ -24,6 +24,25 @@ def login(
     db: Session = Depends(get_db_session),
 ) -> LoginResponse:
     result = UserService(db).login(payload)
+    settings = get_settings()
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=result.access_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.env not in ("development", "test"),
+        max_age=settings.jwt_expire_minutes * 60,
+    )
+    return result
+
+
+@router.post("/login/company", response_model=LoginResponse)
+def login_company(
+    payload: CompanyLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db_session),
+) -> LoginResponse:
+    result = UserService(db).login_company(payload.organization_slug, payload.password)
     settings = get_settings()
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,

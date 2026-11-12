@@ -21,8 +21,13 @@ export function slugify(name: string): string {
 }
 
 export const authApi = {
+  slugify,
   async login(payload: LoginPayload): Promise<AuthResponse> {
     return api.post<AuthResponse>("/api/users/login", payload);
+  },
+
+  async loginCompany(payload: { organization_slug: string; password: string }): Promise<AuthResponse> {
+    return api.post<AuthResponse>("/api/users/login/company", payload);
   },
 
   async signup(payload: SignupPayload): Promise<{ slug: string }> {
