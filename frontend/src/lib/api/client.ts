@@ -114,7 +114,7 @@ export async function apiFetch<T = unknown>(
     const errPayload = isJson && payload && typeof payload === "object"
       ? (payload as ApiError)
       : null;
-    const message = errPayload?.detail || (typeof payload === "string" && payload) || `Error ${response.status}`;
+    const message = errPayload?.detail || errPayload?.error?.message || (typeof payload === "string" && payload) || `Error ${response.status}`;
     throw new ApiClientError(message, response.status, errPayload, payload);
   }
 

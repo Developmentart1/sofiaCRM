@@ -13,9 +13,10 @@ export interface PaginatedResponse<T> {
 }
 
 export interface ApiError {
-  detail: string;
+  detail?: string;
   code?: string;
   field?: string;
+  error?: { code?: string; message?: string; details?: unknown };
 }
 
 export type UserRole = "admin" | "director" | "gerente" | "asesor" | "operaciones";
