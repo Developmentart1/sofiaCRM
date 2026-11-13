@@ -3,7 +3,6 @@ import type {
   Contact,
   ContactCreate,
   ContactFilters,
-  PaginatedResponse,
   Activity,
   Task,
   Opportunity,
@@ -12,8 +11,8 @@ import type {
 } from "@/lib/types/api";
 
 export const contactsApi = {
-  async list(filters: ContactFilters = {}): Promise<PaginatedResponse<Contact>> {
-    return api.get<PaginatedResponse<Contact>>("/api/contacts", { query: filters });
+  async list(filters: ContactFilters = {}): Promise<Contact[]> {
+    return api.get<Contact[]>("/api/contacts", { query: filters });
   },
   async get(id: string): Promise<Contact> {
     return api.get<Contact>(`/api/contacts/${id}`);

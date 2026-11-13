@@ -29,8 +29,8 @@ export function useContacts(filters: ContactFilters) {
     setError(null);
     try {
       const res = await contactsApi.list(filters);
-      setItems(res.items);
-      setTotal(res.total);
+      setItems(res);
+      setTotal(res.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
